@@ -2,15 +2,43 @@ import { NuevoRegistroAcceso, RegistroAcceso, TecnicoAcceso } from '../types/reg
 import { extraerPatentesIndividuales } from '../utils/patente';
 import { formatearRut } from '../utils/rut';
 import { formatearNombrePersona, normalizarNumeroAtm } from '../utils/validaciones';
+import { supabase } from './supabaseClient';
 
 const STORAGE_KEY_REGISTROS = 'atm_acceso_registros_v1';
 const STORAGE_KEY_EMPRESAS = 'atm_acceso_empresas_historico_v1';
+const TABLA_SUPABASE = 'registros_acceso_atm';
+
+interface FilaRegistroSupabase {
+  id: string;
+  fecha_hora: string;
+  numero_atm: string;
+  nombre_local: string;
+  empresa: string;
+  tecnicos: TecnicoAcceso[];
+  patentes: string[];
+}
 
 function generarIdUnico(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `reg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function mapearFilaARegistro(fila: FilaRegistroSupabase): RegistroAcceso {
+  return {
+    id: fila.id,
+    fechaHora: fila.fecha_hora,
+    numeroAtm: fila.numero_atm,
+    nombreLocal: fila.nombre_local,
+    empresa: fila.empresa,
+    tecnicos: Array.isArray(fila.tecnicos) ? fila.tecnicos : [],
+    patentes: Array.isArray(fila.patentes) ? fila.patentes : [],
+  };
 }
 
 function normalizarRegistroGuardado(reg: RegistroAcceso): RegistroAcceso {
@@ -35,12 +63,11 @@ function normalizarRegistroGuardado(reg: RegistroAcceso): RegistroAcceso {
 }
 
 /**
- * Capa de almacenamiento aislada.
- * Actualmente persiste en localStorage, pero mantiene una interfaz clara
- * para migrar fácilmente a Supabase o una API REST en el futuro.
+ * Capa de almacenamiento conectada a Supabase (tabla `public.registros_acceso_atm`)
+ * con respaldo automático en localStorage para funcionamiento rápido y en terreno.
  */
 export const storageService = {
-  obtenerRegistros(): RegistroAcceso[] {
+  obtenerRegistrosLocales(): RegistroAcceso[] {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_REGISTROS);
       if (!raw) return [];
@@ -49,43 +76,80 @@ export const storageService = {
       return parsed
         .map(normalizarRegistroGuardado)
         .sort((a, b) => new Date(b.fechaHora).getTime() - new Date(a.fechaHora).getTime());
-    } catch (error) {
-      console.error('Error al leer registros desde localStorage:', error);
+    } catch {
       return [];
     }
   },
 
-  guardarRegistro(datos: NuevoRegistroAcceso): RegistroAcceso {
-    const actuales = this.obtenerRegistros();
+  guardarCacheLocal(registros: RegistroAcceso[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(registros));
+    } catch (error) {
+      console.error('Error al actualizar caché local:', error);
+    }
+  },
 
+  async obtenerRegistros(): Promise<RegistroAcceso[]> {
+    const { data, error } = await supabase
+      .from(TABLA_SUPABASE)
+      .select('id, fecha_hora, numero_atm, nombre_local, empresa, tecnicos, patentes')
+      .order('fecha_hora', { ascending: false });
+
+    if (error) {
+      console.error('Error al obtener registros desde Supabase, usando caché local:', error.message);
+      return this.obtenerRegistrosLocales();
+    }
+
+    const remotos = (data as FilaRegistroSupabase[]).map(mapearFilaARegistro);
+    this.guardarCacheLocal(remotos);
+    remotos.forEach((r) => this.registrarEmpresaSugerida(r.empresa));
+    return remotos;
+  },
+
+  async guardarRegistro(datos: NuevoRegistroAcceso): Promise<RegistroAcceso> {
     const tecnicosNormalizados: TecnicoAcceso[] = datos.tecnicos.map((t) => ({
       nombre: formatearNombrePersona(t.nombre, false),
       apellido: formatearNombrePersona(t.apellido, false),
       rut: formatearRut(t.rut),
     }));
 
-    const nuevoRegistro: RegistroAcceso = {
+    const filaNueva: FilaRegistroSupabase = {
       id: generarIdUnico(),
-      fechaHora: new Date().toISOString(),
-      numeroAtm: normalizarNumeroAtm(datos.numeroAtm).replace(/-+$/, ''),
-      nombreLocal: datos.nombreLocal.trim(),
+      fecha_hora: new Date().toISOString(),
+      numero_atm: normalizarNumeroAtm(datos.numeroAtm).replace(/-+$/, ''),
+      nombre_local: datos.nombreLocal.trim(),
       empresa: datos.empresa.trim(),
       tecnicos: tecnicosNormalizados,
       patentes: extraerPatentesIndividuales(datos.patentes),
     };
 
-    const actualizados = [nuevoRegistro, ...actuales];
-    localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(actualizados));
+    const { data, error } = await supabase
+      .from(TABLA_SUPABASE)
+      .insert([filaNueva])
+      .select('id, fecha_hora, numero_atm, nombre_local, empresa, tecnicos, patentes')
+      .single();
 
-    this.registrarEmpresaSugerida(nuevoRegistro.empresa);
+    if (error) {
+      throw new Error(`No se pudo guardar en Supabase: ${error.message}`);
+    }
 
-    return nuevoRegistro;
+    const guardado = mapearFilaARegistro(data as FilaRegistroSupabase);
+    const actuales = this.obtenerRegistrosLocales();
+    this.guardarCacheLocal([guardado, ...actuales]);
+    this.registrarEmpresaSugerida(guardado.empresa);
+
+    return guardado;
   },
 
-  eliminarRegistro(id: string): RegistroAcceso[] {
-    const actuales = this.obtenerRegistros();
-    const filtrados = actuales.filter((r) => r.id !== id);
-    localStorage.setItem(STORAGE_KEY_REGISTROS, JSON.stringify(filtrados));
+  async eliminarRegistro(id: string): Promise<RegistroAcceso[]> {
+    const { error } = await supabase.from(TABLA_SUPABASE).delete().eq('id', id);
+
+    if (error) {
+      throw new Error(`No se pudo eliminar en Supabase: ${error.message}`);
+    }
+
+    const filtrados = this.obtenerRegistrosLocales().filter((r) => r.id !== id);
+    this.guardarCacheLocal(filtrados);
     return filtrados;
   },
 
@@ -110,7 +174,7 @@ export const storageService = {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_EMPRESAS);
       const historicas: string[] = raw ? JSON.parse(raw) : [];
-      const desdeRegistros = this.obtenerRegistros().map((r) => r.empresa.trim());
+      const desdeRegistros = this.obtenerRegistrosLocales().map((r) => r.empresa.trim());
 
       const mapaUnico = new Map<string, string>();
       [...historicas, ...desdeRegistros].forEach((emp) => {

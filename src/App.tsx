@@ -1,27 +1,59 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { RegistroForm } from './components/RegistroForm';
 import { RegistrosList } from './components/RegistrosList';
 import { storageService } from './services/storage';
 import { NuevoRegistroAcceso, RegistroAcceso } from './types/registro';
 
 export const App: React.FC = () => {
-  const [registros, setRegistros] = useState<RegistroAcceso[]>([]);
-  const [empresasSugeridas, setEmpresasSugeridas] = useState<string[]>([]);
+  const [registros, setRegistros] = useState<RegistroAcceso[]>(() =>
+    storageService.obtenerRegistrosLocales()
+  );
+  const [empresasSugeridas, setEmpresasSugeridas] = useState<string[]>(() =>
+    storageService.obtenerEmpresasHistoricas()
+  );
+  const [cargando, setCargando] = useState<boolean>(true);
+  const [errorConexion, setErrorConexion] = useState<string | null>(null);
 
-  useEffect(() => {
-    setRegistros(storageService.obtenerRegistros());
-    setEmpresasSugeridas(storageService.obtenerEmpresasHistoricas());
+  const cargarDesdeSupabase = useCallback(async () => {
+    setCargando(true);
+    setErrorConexion(null);
+    try {
+      const datos = await storageService.obtenerRegistros();
+      setRegistros(datos);
+      setEmpresasSugeridas(storageService.obtenerEmpresasHistoricas());
+    } catch (err) {
+      setErrorConexion(err instanceof Error ? err.message : 'Error de sincronización');
+    } finally {
+      setCargando(false);
+    }
   }, []);
 
-  const handleGuardarRegistro = (datos: NuevoRegistroAcceso) => {
-    storageService.guardarRegistro(datos);
-    setRegistros(storageService.obtenerRegistros());
-    setEmpresasSugeridas(storageService.obtenerEmpresasHistoricas());
+  useEffect(() => {
+    void cargarDesdeSupabase();
+  }, [cargarDesdeSupabase]);
+
+  const handleGuardarRegistro = async (datos: NuevoRegistroAcceso) => {
+    setErrorConexion(null);
+    try {
+      const nuevo = await storageService.guardarRegistro(datos);
+      setRegistros((prev) => [nuevo, ...prev]);
+      setEmpresasSugeridas(storageService.obtenerEmpresasHistoricas());
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al guardar en Supabase';
+      setErrorConexion(msg);
+      throw err;
+    }
   };
 
-  const handleEliminarRegistro = (id: string) => {
-    const actualizados = storageService.eliminarRegistro(id);
-    setRegistros(actualizados);
+  const handleEliminarRegistro = async (id: string) => {
+    setErrorConexion(null);
+    try {
+      const actualizados = await storageService.eliminarRegistro(id);
+      setRegistros(actualizados);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al eliminar en Supabase';
+      setErrorConexion(msg);
+    }
   };
 
   return (
@@ -37,10 +69,18 @@ export const App: React.FC = () => {
               ATM
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-lg font-extrabold tracking-tight sm:text-xl">
                   Registro de Acceso ATM
                 </h1>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold text-white">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      cargando ? 'animate-pulse bg-amber-300' : 'bg-emerald-300'
+                    }`}
+                  />
+                  Supabase
+                </span>
               </div>
               <p className="text-xs font-medium text-white/90">
                 Servicio Técnico &bull; Red de Cajeros Automáticos
@@ -62,6 +102,15 @@ export const App: React.FC = () => {
 
       {/* Contenido Principal */}
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-3 py-5 sm:px-6 sm:py-8">
+        {errorConexion && (
+          <div
+            role="alert"
+            className="rounded-xl border border-santander-300 bg-santander-50 px-4 py-3 text-sm font-medium text-santander-700"
+          >
+            {errorConexion}
+          </div>
+        )}
+
         <RegistroForm
           empresasSugeridas={empresasSugeridas}
           onGuardar={handleGuardarRegistro}
@@ -79,7 +128,7 @@ export const App: React.FC = () => {
       <footer className="border-t border-neutral-200 bg-white py-4 text-center text-xs text-neutral-500">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-1 px-4 sm:flex-row">
           <span className="font-bold text-santander-500">Registro de Acceso ATM</span>
-          <span>Almacenamiento local seguro en el dispositivo</span>
+          <span>Sincronizado en tiempo real con base de datos Supabase</span>
         </div>
       </footer>
     </div>

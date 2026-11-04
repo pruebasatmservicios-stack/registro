@@ -21,7 +21,7 @@ import { TecnicosInput } from './TecnicosInput';
 
 interface RegistroFormProps {
   empresasSugeridas: string[];
-  onGuardar: (datos: NuevoRegistroAcceso) => void;
+  onGuardar: (datos: NuevoRegistroAcceso) => Promise<void> | void;
 }
 
 const crearTecnicoVacio = (): TecnicoAcceso => ({
@@ -61,6 +61,7 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
   const [errores, setErrores] = useState<ErroresFormulario>({});
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [mostrarConfirmacionLimpiar, setMostrarConfirmacionLimpiar] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   const primerCampoRef = useRef<HTMLInputElement>(null);
 
@@ -79,7 +80,7 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
     );
   }, [errores]);
 
-  const botonGuardarDeshabilitado = !validacionGlobal.esValido || tieneErroresVisibles;
+  const botonGuardarDeshabilitado = !validacionGlobal.esValido || tieneErroresVisibles || guardando;
 
   const ocultarExitoSiExiste = () => {
     if (mensajeExito) setMensajeExito(null);
@@ -288,7 +289,7 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
     }, 30);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const resultado = validarFormularioCompleto(datos);
 
@@ -308,9 +309,16 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
       return;
     }
 
-    onGuardar(datos);
-    reiniciarFormulario();
-    setMensajeExito('Registro de acceso guardado exitosamente.');
+    setGuardando(true);
+    try {
+      await onGuardar(datos);
+      reiniciarFormulario();
+      setMensajeExito('Registro de acceso guardado exitosamente en Supabase.');
+    } catch {
+      // El error se muestra en la alerta superior de App.tsx
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const formularioTieneDatos =
