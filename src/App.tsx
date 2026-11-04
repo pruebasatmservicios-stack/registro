@@ -61,16 +61,16 @@ export const App: React.FC = () => {
       {/* Encabezado Principal - Estilo Banco Santander */}
       <header className="sticky top-0 z-30 border-b border-santander-700 bg-santander-500 text-white shadow-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white font-mono text-sm font-black tracking-tight text-santander-500 shadow-xs"
-              aria-hidden="true"
-            >
-              ATM
-            </div>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <img
+              src="/logo-santander.svg"
+              alt="Banco Santander"
+              className="h-8 w-auto shrink-0 sm:h-10"
+            />
+            <div className="h-7 w-px bg-white/30 hidden sm:block" aria-hidden="true" />
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-extrabold tracking-tight sm:text-xl">
+                <h1 className="text-base font-extrabold tracking-tight sm:text-xl">
                   Registro de Acceso ATM
                 </h1>
                 <span className="inline-flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold text-white">
@@ -82,7 +82,7 @@ export const App: React.FC = () => {
                   Supabase
                 </span>
               </div>
-              <p className="text-xs font-medium text-white/90">
+              <p className="text-[11px] font-medium text-white/90 sm:text-xs">
                 Servicio Técnico &bull; Red de Cajeros Automáticos
               </p>
             </div>
@@ -90,7 +90,7 @@ export const App: React.FC = () => {
 
           <a
             href="#seccion-registros"
-            className="flex items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-2 text-xs font-bold text-white ring-1 ring-white/35 transition-colors hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white"
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-2 text-xs font-bold text-white ring-1 ring-white/35 transition-colors hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white"
           >
             <span>Registros</span>
             <span className="rounded-full bg-white px-2 py-0.5 text-xs font-extrabold text-santander-500">
@@ -126,8 +126,17 @@ export const App: React.FC = () => {
 
       {/* Pie de página */}
       <footer className="border-t border-neutral-200 bg-white py-4 text-center text-xs text-neutral-500">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-1 px-4 sm:flex-row">
-          <span className="font-bold text-santander-500">Registro de Acceso ATM</span>
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 px-4 sm:flex-row">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center rounded-md bg-santander-500 px-2 py-1">
+              <img
+                src="/logo-santander.svg"
+                alt="Santander"
+                className="h-3.5 w-auto"
+              />
+            </span>
+            <span className="font-bold text-[#191919]">Registro de Acceso ATM</span>
+          </div>
           <span>Sincronizado en tiempo real con base de datos Supabase</span>
         </div>
       </footer>
