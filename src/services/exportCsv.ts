@@ -14,28 +14,49 @@ function escaparCeldaCsv(valor: string): string {
 }
 
 /**
- * Formatea una fecha ISO en formato legible para Chile (DD/MM/YYYY HH:mm:ss).
+ * Formatea una fecha ISO estrictamente como DD/MM/AAAA (ej: 04/11/2026).
  */
-export function formatearFechaHoraLegible(isoString: string): string {
+export function formatearFechaDDMMAAAA(isoString: string): string {
   try {
     const fecha = new Date(isoString);
-    return new Intl.DateTimeFormat('es-CL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).format(fecha);
+    if (Number.isNaN(fecha.getTime())) return isoString;
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const anio = fecha.getFullYear();
+    return `${dia}/${mes}/${anio}`;
   } catch {
     return isoString;
   }
 }
 
 /**
+ * Formatea la hora de una fecha ISO como HH:mm:ss (ej: 14:35:10).
+ */
+export function formatearHoraHHMMSS(isoString: string): string {
+  try {
+    const fecha = new Date(isoString);
+    if (Number.isNaN(fecha.getTime())) return '';
+    const horas = String(fecha.getHours()).padStart(2, '0');
+    const minutos = String(fecha.getMinutes()).padStart(2, '0');
+    const segundos = String(fecha.getSeconds()).padStart(2, '0');
+    return `${horas}:${minutos}:${segundos}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Formatea una fecha ISO en formato legible DD/MM/AAAA HH:mm:ss para mostrar en pantalla.
+ */
+export function formatearFechaHoraLegible(isoString: string): string {
+  const fecha = formatearFechaDDMMAAAA(isoString);
+  const hora = formatearHoraHHMMSS(isoString);
+  return hora ? `${fecha} ${hora}` : fecha;
+}
+
+/**
  * Genera y descarga un archivo CSV codificado en UTF-8 con BOM (\uFEFF) y separador punto y coma (;),
- * garantizando compatibilidad directa con Microsoft Excel para tildes y ñ.
+ * garantizando compatibilidad directa con Microsoft Excel para tildes, ñ y fechas DD/MM/AAAA.
  */
 export function exportarRegistrosACsv(
   registros: RegistroAcceso[],
@@ -48,9 +69,8 @@ export function exportarRegistrosACsv(
 
   if (modo === 'filas_por_tecnico') {
     encabezados = [
-      'ID Visita',
-      'Fecha y Hora (ISO)',
-      'Fecha y Hora Local',
+      'Fecha',
+      'Hora',
       'N° ATM',
       'Nombre Local',
       'Empresa',
@@ -62,13 +82,13 @@ export function exportarRegistrosACsv(
     ];
 
     filas = registros.flatMap((reg) => {
-      const fechaLocal = formatearFechaHoraLegible(reg.fechaHora);
+      const fechaDDMMAAAA = formatearFechaDDMMAAAA(reg.fechaHora);
+      const horaHHMMSS = formatearHoraHHMMSS(reg.fechaHora);
       const patentesTexto = reg.patentes.join('-');
 
       return reg.tecnicos.map((tec, index) => [
-        escaparCeldaCsv(reg.id),
-        escaparCeldaCsv(reg.fechaHora),
-        escaparCeldaCsv(fechaLocal),
+        escaparCeldaCsv(fechaDDMMAAAA),
+        escaparCeldaCsv(horaHHMMSS),
         escaparCeldaCsv(reg.numeroAtm),
         escaparCeldaCsv(reg.nombreLocal),
         escaparCeldaCsv(reg.empresa),
@@ -94,9 +114,8 @@ export function exportarRegistrosACsv(
     }
 
     encabezados = [
-      'ID Visita',
-      'Fecha y Hora (ISO)',
-      'Fecha y Hora Local',
+      'Fecha',
+      'Hora',
       'N° ATM',
       'Nombre Local',
       'Empresa',
@@ -121,9 +140,8 @@ export function exportarRegistrosACsv(
       }
 
       return [
-        escaparCeldaCsv(reg.id),
-        escaparCeldaCsv(reg.fechaHora),
-        escaparCeldaCsv(formatearFechaHoraLegible(reg.fechaHora)),
+        escaparCeldaCsv(formatearFechaDDMMAAAA(reg.fechaHora)),
+        escaparCeldaCsv(formatearHoraHHMMSS(reg.fechaHora)),
         escaparCeldaCsv(reg.numeroAtm),
         escaparCeldaCsv(reg.nombreLocal),
         escaparCeldaCsv(reg.empresa),
@@ -143,7 +161,10 @@ export function exportarRegistrosACsv(
 
   const url = URL.createObjectURL(blob);
   const enlace = document.createElement('a');
-  const fechaArchivo = new Date().toISOString().slice(0, 10);
+  const hoy = new Date();
+  const fechaArchivo = `${String(hoy.getDate()).padStart(2, '0')}-${String(
+    hoy.getMonth() + 1
+  ).padStart(2, '0')}-${hoy.getFullYear()}`;
 
   enlace.href = url;
   enlace.setAttribute('download', `registros_atm_${fechaArchivo}.csv`);
