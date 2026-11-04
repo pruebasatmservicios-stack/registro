@@ -11,16 +11,50 @@ interface RegistrosListProps {
   onEliminar: (id: string) => void;
 }
 
+/**
+ * Convierte un objeto Date a string YYYY-MM-DD en hora local para inputs type="date".
+ */
+function obtenerFechaInputLocal(fecha: Date): string {
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+}
+
 export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onEliminar }) => {
   const [busqueda, setBusqueda] = useState('');
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [modoCsv, setModoCsv] = useState<ModoExportacionCsv>('filas_por_tecnico');
   const [registroAEliminar, setRegistroAEliminar] = useState<RegistroAcceso | null>(null);
 
   const registrosFiltrados = useMemo(() => {
     const termino = busqueda.trim().toLocaleLowerCase('es-CL');
-    if (!termino) return registros;
+
+    let timestampDesde: number | null = null;
+    if (fechaDesde) {
+      const [anio, mes, dia] = fechaDesde.split('-').map(Number);
+      timestampDesde = new Date(anio, mes - 1, dia, 0, 0, 0, 0).getTime();
+    }
+
+    let timestampHasta: number | null = null;
+    if (fechaHasta) {
+      const [anio, mes, dia] = fechaHasta.split('-').map(Number);
+      timestampHasta = new Date(anio, mes - 1, dia, 23, 59, 59, 999).getTime();
+    }
 
     return registros.filter((reg) => {
+      const tsRegistro = new Date(reg.fechaHora).getTime();
+
+      if (timestampDesde !== null && tsRegistro < timestampDesde) {
+        return false;
+      }
+      if (timestampHasta !== null && tsRegistro > timestampHasta) {
+        return false;
+      }
+
+      if (!termino) return true;
+
       const fechaLegible = formatearFechaHoraLegible(reg.fechaHora).toLocaleLowerCase('es-CL');
       const camposTecnicos = reg.tecnicos.flatMap((t) => [
         t.nombre,
@@ -41,13 +75,41 @@ export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onElimi
 
       return campos.some((campo) => campo.toLocaleLowerCase('es-CL').includes(termino));
     });
-  }, [registros, busqueda]);
+  }, [registros, busqueda, fechaDesde, fechaHasta]);
 
   const confirmarEliminacion = () => {
     if (!registroAEliminar) return;
     onEliminar(registroAEliminar.id);
     setRegistroAEliminar(null);
   };
+
+  const aplicarRangoHoy = () => {
+    const hoy = obtenerFechaInputLocal(new Date());
+    setFechaDesde(hoy);
+    setFechaHasta(hoy);
+  };
+
+  const aplicarUltimos7Dias = () => {
+    const hoy = new Date();
+    const hace7 = new Date();
+    hace7.setDate(hoy.getDate() - 6);
+    setFechaDesde(obtenerFechaInputLocal(hace7));
+    setFechaHasta(obtenerFechaInputLocal(hoy));
+  };
+
+  const aplicarEsteMes = () => {
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    setFechaDesde(obtenerFechaInputLocal(inicioMes));
+    setFechaHasta(obtenerFechaInputLocal(hoy));
+  };
+
+  const limpiarFechas = () => {
+    setFechaDesde('');
+    setFechaHasta('');
+  };
+
+  const hayFiltroActivo = Boolean(busqueda || fechaDesde || fechaHasta);
 
   return (
     <section
@@ -62,7 +124,8 @@ export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onElimi
               Registros Guardados
             </h2>
             <span className="rounded-full bg-santander-50 px-2.5 py-0.5 text-xs font-extrabold text-santander-600 ring-1 ring-santander-200">
-              {registros.length}
+              {registrosFiltrados.length}
+              {hayFiltroActivo ? ` / ${registros.length}` : ''}
             </span>
           </div>
           <p className="text-xs text-neutral-500">
@@ -118,44 +181,124 @@ export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onElimi
         </div>
       </div>
 
-      {/* Buscador */}
-      <div className="mt-4">
-        <label htmlFor="buscador-registros" className="sr-only">
-          Buscar por N° ATM, RUT, nombre, local, empresa o patente
-        </label>
-        <div className="relative">
-          <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            id="buscador-registros"
-            type="search"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por N° ATM, RUT, técnico, empresa, local o patente..."
-            className="min-h-[48px] w-full rounded-xl border border-neutral-300 bg-neutral-50/70 pl-11 pr-10 py-2.5 text-base text-[#191919] placeholder:text-neutral-400 transition-colors focus:border-santander-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-santander-500/25"
-          />
-          {busqueda && (
-            <button
-              type="button"
-              onClick={() => setBusqueda('')}
-              aria-label="Limpiar búsqueda"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-200 hover:text-[#191919]"
+      {/* Buscador y Filtro por Rango de Fechas */}
+      <div className="mt-4 flex flex-col gap-3">
+        {/* Buscador de texto */}
+        <div>
+          <label htmlFor="buscador-registros" className="sr-only">
+            Buscar por N° ATM, RUT, nombre, local, empresa o patente
+          </label>
+          <div className="relative">
+            <svg
+              className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden="true"
             >
-              ✕
-            </button>
-          )}
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              id="buscador-registros"
+              type="search"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por N° ATM, RUT, técnico, empresa, local o patente..."
+              className="min-h-[48px] w-full rounded-xl border border-neutral-300 bg-neutral-50/70 pl-11 pr-10 py-2.5 text-base text-[#191919] placeholder:text-neutral-400 transition-colors focus:border-santander-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-santander-500/25"
+            />
+            {busqueda && (
+              <button
+                type="button"
+                onClick={() => setBusqueda('')}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-200 hover:text-[#191919]"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Rango de fechas */}
+        <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="fecha-desde"
+                className="text-xs font-bold tracking-wide text-neutral-700 uppercase"
+              >
+                Fecha desde
+              </label>
+              <input
+                id="fecha-desde"
+                type="date"
+                value={fechaDesde}
+                max={fechaHasta || undefined}
+                onChange={(e) => setFechaDesde(e.target.value)}
+                className="min-h-[48px] w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-sm font-medium text-[#191919] transition-colors focus:border-santander-500 focus:outline-none focus:ring-2 focus:ring-santander-500/25"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="fecha-hasta"
+                className="text-xs font-bold tracking-wide text-neutral-700 uppercase"
+              >
+                Fecha hasta
+              </label>
+              <input
+                id="fecha-hasta"
+                type="date"
+                value={fechaHasta}
+                min={fechaDesde || undefined}
+                onChange={(e) => setFechaHasta(e.target.value)}
+                className="min-h-[48px] w-full rounded-xl border border-neutral-300 bg-white px-3.5 py-2 text-sm font-medium text-[#191919] transition-colors focus:border-santander-500 focus:outline-none focus:ring-2 focus:ring-santander-500/25"
+              />
+            </div>
+          </div>
+
+          {/* Accesos rápidos de fecha */}
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-neutral-500 mr-1">Rápido:</span>
+              <button
+                type="button"
+                onClick={aplicarRangoHoy}
+                className="rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-semibold text-neutral-700 transition-colors hover:border-santander-400 hover:bg-santander-50 hover:text-santander-600"
+              >
+                Hoy
+              </button>
+              <button
+                type="button"
+                onClick={aplicarUltimos7Dias}
+                className="rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-semibold text-neutral-700 transition-colors hover:border-santander-400 hover:bg-santander-50 hover:text-santander-600"
+              >
+                Últimos 7 días
+              </button>
+              <button
+                type="button"
+                onClick={aplicarEsteMes}
+                className="rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-semibold text-neutral-700 transition-colors hover:border-santander-400 hover:bg-santander-50 hover:text-santander-600"
+              >
+                Este mes
+              </button>
+            </div>
+
+            {(fechaDesde || fechaHasta) && (
+              <button
+                type="button"
+                onClick={limpiarFechas}
+                className="rounded-full bg-santander-50 px-3 py-1 text-xs font-bold text-santander-600 ring-1 ring-santander-200 transition-colors hover:bg-santander-100"
+              >
+                ✕ Limpiar fechas
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -170,8 +313,20 @@ export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onElimi
           <p className="mt-1 text-sm text-neutral-500">
             {registros.length === 0
               ? 'Complete el formulario superior para registrar la primera visita técnica.'
-              : `No hay resultados para "${busqueda}". Intente con otro término.`}
+              : 'No hay registros que coincidan con los filtros o el rango de fechas seleccionado.'}
           </p>
+          {hayFiltroActivo && (
+            <button
+              type="button"
+              onClick={() => {
+                setBusqueda('');
+                limpiarFechas();
+              }}
+              className="mt-3 rounded-full border border-santander-500 bg-white px-4 py-1.5 text-xs font-bold text-santander-500 hover:bg-santander-50"
+            >
+              Ver todos los registros
+            </button>
+          )}
         </div>
       ) : (
         <>
