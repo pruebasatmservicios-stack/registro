@@ -130,8 +130,8 @@ export const TecnicosInput: React.FC<TecnicosInputProps> = ({
                 maxLength={12}
                 autoCapitalize="characters"
                 autoComplete="off"
-                placeholder="12.345.678-5"
-                ayuda="Se formatea automáticamente con puntos y guion (validación módulo 11)."
+                placeholder="12.345.678-0"
+                ayuda="Se formatea automáticamente con puntos y guion (ej: 12.345.678-0)."
               />
             </div>
           );
