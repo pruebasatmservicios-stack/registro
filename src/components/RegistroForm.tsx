@@ -254,7 +254,7 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
   };
 
   const handleAgregarTecnico = () => {
-    if (datos.tecnicos.length >= 10) return;
+    if (datos.tecnicos.length >= 25) return;
     ocultarExitoSiExiste();
     const nuevosTecnicos = [...datos.tecnicos, crearTecnicoVacio()];
     const nuevosTocados = [...(tocados.tecnicos || datos.tecnicos.map(() => ({}))), {}];

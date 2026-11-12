@@ -14,7 +14,7 @@ interface TecnicosInputProps {
   onEliminarTecnico: (index: number) => void;
 }
 
-const MAX_TECNICOS = 10;
+const MAX_TECNICOS = 25;
 const MIN_TECNICOS = 1;
 
 export const TecnicosInput: React.FC<TecnicosInputProps> = ({

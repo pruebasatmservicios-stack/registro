@@ -1,8 +1,14 @@
 /**
- * Limpia el RUT dejando solo números y la letra K en mayúscula.
+ * Limpia el RUT dejando solo números y la letra K en mayúscula,
+ * y elimina ceros a la izquierda del cuerpo (ej: "09.123.456-0" -> "91234560")
+ * para evitar que se trunque el dígito verificador final.
  */
 export function limpiarRut(valor: string): string {
-  return valor.replace(/[^0-9kK]/g, '').toUpperCase();
+  const sinFormato = valor.replace(/[^0-9kK]/g, '').toUpperCase();
+  if (sinFormato.length <= 1) return sinFormato;
+  const cuerpoSinCerosIniciales = sinFormato.slice(0, -1).replace(/^0+/, '');
+  const dv = sinFormato.slice(-1);
+  return `${cuerpoSinCerosIniciales}${dv}`;
 }
 
 /**
@@ -48,10 +54,10 @@ export function validarRut(rut: string): { valido: boolean; mensaje?: string } {
     return { valido: false, mensaje: 'El RUT es obligatorio.' };
   }
 
-  if (limpio.length < 8 || limpio.length > 9) {
+  if (limpio.length < 7 || limpio.length > 9) {
     return {
       valido: false,
-      mensaje: 'El RUT debe tener entre 7 y 8 dígitos más el dígito verificador (ej: 12.345.678-5).',
+      mensaje: 'El RUT debe tener entre 6 y 8 dígitos más el dígito verificador (ej: 12.345.678-5).',
     };
   }
 
@@ -70,7 +76,7 @@ export function validarRut(rut: string): { valido: boolean; mensaje?: string } {
   if (dvIngresado !== dvEsperado) {
     return {
       valido: false,
-      mensaje: `RUT inválido: el dígito verificador no corresponde (se esperaba -${dvEsperado}).`,
+      mensaje: `RUT inválido: el dígito verificador no corresponde (para ${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.')} corresponde -${dvEsperado}).`,
     };
   }
 
