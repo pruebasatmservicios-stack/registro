@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ErroresFormulario,
   ErrorTecnico,
   NuevoRegistroAcceso,
+  RegistroAcceso,
   TecnicoAcceso,
 } from '../types/registro';
 import { validarListaPatentes } from '../utils/patente';
@@ -21,7 +22,11 @@ import { TecnicosInput } from './TecnicosInput';
 
 interface RegistroFormProps {
   empresasSugeridas: string[];
+  registroEnEdicion?: RegistroAcceso | null;
+  plantillaDuplicada?: { registro: RegistroAcceso; timestamp: number } | null;
   onGuardar: (datos: NuevoRegistroAcceso) => Promise<void> | void;
+  onActualizar?: (id: string, datos: NuevoRegistroAcceso) => Promise<void> | void;
+  onCancelarModoEspecial?: () => void;
 }
 
 const crearTecnicoVacio = (): TecnicoAcceso => ({
@@ -54,7 +59,11 @@ type CampoTocado = {
 
 export const RegistroForm: React.FC<RegistroFormProps> = ({
   empresasSugeridas,
+  registroEnEdicion,
+  plantillaDuplicada,
   onGuardar,
+  onActualizar,
+  onCancelarModoEspecial,
 }) => {
   const [datos, setDatos] = useState<NuevoRegistroAcceso>(crearEstadoInicial);
   const [tocados, setTocados] = useState<CampoTocado>({});
@@ -64,6 +73,56 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
   const [guardando, setGuardando] = useState(false);
 
   const primerCampoRef = useRef<HTMLInputElement>(null);
+
+  // Cargar datos cuando se selecciona "Modificar" un registro existente
+  useEffect(() => {
+    if (!registroEnEdicion) return;
+    setDatos({
+      numeroAtm: registroEnEdicion.numeroAtm,
+      nombreLocal: registroEnEdicion.nombreLocal,
+      empresa: registroEnEdicion.empresa,
+      tecnicos:
+        registroEnEdicion.tecnicos.length > 0
+          ? registroEnEdicion.tecnicos.map((t) => ({ ...t }))
+          : [crearTecnicoVacio()],
+      patentes:
+        registroEnEdicion.patentes.length > 0
+          ? [...registroEnEdicion.patentes]
+          : [''],
+    });
+    setTocados({});
+    setErrores({});
+    setMensajeExito(null);
+    setTimeout(() => {
+      primerCampoRef.current?.focus();
+    }, 50);
+  }, [registroEnEdicion]);
+
+  // Cargar datos cuando se selecciona "Duplicar" un registro para otro punto/ATM
+  useEffect(() => {
+    if (!plantillaDuplicada) return;
+    const { registro } = plantillaDuplicada;
+    setDatos({
+      numeroAtm: registro.numeroAtm,
+      nombreLocal: registro.nombreLocal,
+      empresa: registro.empresa,
+      tecnicos:
+        registro.tecnicos.length > 0
+          ? registro.tecnicos.map((t) => ({ ...t }))
+          : [crearTecnicoVacio()],
+      patentes:
+        registro.patentes.length > 0
+          ? [...registro.patentes]
+          : [''],
+    });
+    setTocados({});
+    setErrores({});
+    setMensajeExito(null);
+    setTimeout(() => {
+      primerCampoRef.current?.focus();
+      primerCampoRef.current?.select();
+    }, 50);
+  }, [plantillaDuplicada]);
 
   const validacionGlobal = useMemo(() => validarFormularioCompleto(datos), [datos]);
 
@@ -80,7 +139,8 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
     );
   }, [errores]);
 
-  const botonGuardarDeshabilitado = !validacionGlobal.esValido || tieneErroresVisibles || guardando;
+  const botonGuardarDeshabilitado =
+    !validacionGlobal.esValido || tieneErroresVisibles || guardando;
 
   const ocultarExitoSiExiste = () => {
     if (mensajeExito) setMensajeExito(null);
@@ -284,6 +344,7 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
     setTocados({});
     setErrores({});
     setMostrarConfirmacionLimpiar(false);
+    onCancelarModoEspecial?.();
     setTimeout(() => {
       primerCampoRef.current?.focus();
     }, 30);
@@ -311,9 +372,15 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
 
     setGuardando(true);
     try {
-      await onGuardar(datos);
-      reiniciarFormulario();
-      setMensajeExito('Registro de acceso guardado exitosamente en Supabase.');
+      if (registroEnEdicion && onActualizar) {
+        await onActualizar(registroEnEdicion.id, datos);
+        reiniciarFormulario();
+        setMensajeExito('Registro modificado y actualizado exitosamente en Supabase.');
+      } else {
+        await onGuardar(datos);
+        reiniciarFormulario();
+        setMensajeExito('Registro de acceso guardado exitosamente en Supabase.');
+      }
     } catch {
       // El error se muestra en la alerta superior de App.tsx
     } finally {
@@ -335,16 +402,53 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
       aria-labelledby="titulo-formulario"
       className="rounded-2xl border border-neutral-200 border-t-4 border-t-santander-500 bg-white p-4 shadow-sm sm:p-6"
     >
-      <div className="mb-5 flex items-center justify-between border-b border-neutral-100 pb-3.5">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 pb-3.5">
         <div>
           <h2 id="titulo-formulario" className="text-lg font-extrabold text-[#191919]">
-            Nuevo Registro de Visita
+            {registroEnEdicion
+              ? `Modificar Registro (ATM ${registroEnEdicion.numeroAtm})`
+              : plantillaDuplicada
+              ? 'Nuevo Registro desde Plantilla Duplicada'
+              : 'Nuevo Registro de Visita'}
           </h2>
           <p className="text-xs text-neutral-500">
             Todos los campos marcados con <span className="font-bold text-santander-500">*</span> son obligatorios
           </p>
         </div>
+
+        {(registroEnEdicion || plantillaDuplicada) && (
+          <button
+            type="button"
+            onClick={reiniciarFormulario}
+            className="rounded-full border border-neutral-300 bg-neutral-100 px-3.5 py-1.5 text-xs font-bold text-neutral-700 transition-colors hover:bg-neutral-200"
+          >
+            ✕ Cancelar {registroEnEdicion ? 'edición' : 'duplicado'}
+          </button>
+        )}
       </div>
+
+      {/* Aviso de Modo Edición */}
+      {registroEnEdicion && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          <span>
+            Estás <strong>modificando</strong> el registro del ATM{' '}
+            <strong className="font-mono">{registroEnEdicion.numeroAtm}</strong> (
+            {registroEnEdicion.nombreLocal}). Al guardar se actualizará este registro.
+          </span>
+        </div>
+      )}
+
+      {/* Aviso de Modo Duplicar para otro punto */}
+      {!registroEnEdicion && plantillaDuplicada && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-900">
+          <span>
+            Lista de técnicos, patentes y empresa cargada desde{' '}
+            <strong className="font-mono">ATM {plantillaDuplicada.registro.numeroAtm}</strong>.
+            Cambia el <strong>N° ATM</strong> o <strong>Nombre Local</strong> para el nuevo punto y presiona{' '}
+            <strong>Guardar registro</strong>.
+          </span>
+        </div>
+      )}
 
       {mensajeExito && (
         <div
@@ -474,7 +578,13 @@ export const RegistroForm: React.FC<RegistroFormProps> = ({
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
-            <span>Guardar registro</span>
+            <span>
+              {guardando
+                ? 'Guardando...'
+                : registroEnEdicion
+                ? 'Guardar cambios'
+                : 'Guardar registro'}
+            </span>
           </button>
 
           <button

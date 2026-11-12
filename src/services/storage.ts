@@ -141,6 +141,42 @@ export const storageService = {
     return guardado;
   },
 
+  async actualizarRegistro(id: string, datos: NuevoRegistroAcceso): Promise<RegistroAcceso> {
+    const tecnicosNormalizados: TecnicoAcceso[] = datos.tecnicos.map((t) => ({
+      nombre: formatearNombrePersona(t.nombre, false),
+      apellido: formatearNombrePersona(t.apellido, false),
+      rut: formatearRut(t.rut),
+    }));
+
+    const camposActualizados = {
+      numero_atm: normalizarNumeroAtm(datos.numeroAtm).replace(/-+$/, ''),
+      nombre_local: datos.nombreLocal.trim(),
+      empresa: datos.empresa.trim(),
+      tecnicos: tecnicosNormalizados,
+      patentes: extraerPatentesIndividuales(datos.patentes),
+    };
+
+    const { data, error } = await supabase
+      .from(TABLA_SUPABASE)
+      .update(camposActualizados)
+      .eq('id', id)
+      .select('id, fecha_hora, numero_atm, nombre_local, empresa, tecnicos, patentes')
+      .single();
+
+    if (error) {
+      throw new Error(`No se pudo actualizar en Supabase: ${error.message}`);
+    }
+
+    const actualizado = mapearFilaARegistro(data as FilaRegistroSupabase);
+    const actuales = this.obtenerRegistrosLocales().map((r) =>
+      r.id === id ? actualizado : r
+    );
+    this.guardarCacheLocal(actuales);
+    this.registrarEmpresaSugerida(actualizado.empresa);
+
+    return actualizado;
+  },
+
   async eliminarRegistro(id: string): Promise<RegistroAcceso[]> {
     const { error } = await supabase.from(TABLA_SUPABASE).delete().eq('id', id);
 

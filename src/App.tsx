@@ -13,6 +13,11 @@ export const App: React.FC = () => {
   );
   const [cargando, setCargando] = useState<boolean>(true);
   const [errorConexion, setErrorConexion] = useState<string | null>(null);
+  const [registroEnEdicion, setRegistroEnEdicion] = useState<RegistroAcceso | null>(null);
+  const [plantillaDuplicada, setPlantillaDuplicada] = useState<{
+    registro: RegistroAcceso;
+    timestamp: number;
+  } | null>(null);
 
   const cargarDesdeSupabase = useCallback(async () => {
     setCargando(true);
@@ -38,8 +43,23 @@ export const App: React.FC = () => {
       const nuevo = await storageService.guardarRegistro(datos);
       setRegistros((prev) => [nuevo, ...prev]);
       setEmpresasSugeridas(storageService.obtenerEmpresasHistoricas());
+      setPlantillaDuplicada(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al guardar en Supabase';
+      setErrorConexion(msg);
+      throw err;
+    }
+  };
+
+  const handleActualizarRegistro = async (id: string, datos: NuevoRegistroAcceso) => {
+    setErrorConexion(null);
+    try {
+      const actualizado = await storageService.actualizarRegistro(id, datos);
+      setRegistros((prev) => prev.map((r) => (r.id === id ? actualizado : r)));
+      setEmpresasSugeridas(storageService.obtenerEmpresasHistoricas());
+      setRegistroEnEdicion(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al actualizar en Supabase';
       setErrorConexion(msg);
       throw err;
     }
@@ -50,10 +70,30 @@ export const App: React.FC = () => {
     try {
       const actualizados = await storageService.eliminarRegistro(id);
       setRegistros(actualizados);
+      if (registroEnEdicion?.id === id) {
+        setRegistroEnEdicion(null);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error al eliminar en Supabase';
       setErrorConexion(msg);
     }
+  };
+
+  const handleSeleccionarEditar = (registro: RegistroAcceso) => {
+    setPlantillaDuplicada(null);
+    setRegistroEnEdicion(registro);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSeleccionarDuplicar = (registro: RegistroAcceso) => {
+    setRegistroEnEdicion(null);
+    setPlantillaDuplicada({ registro, timestamp: Date.now() });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelarModoEspecial = () => {
+    setRegistroEnEdicion(null);
+    setPlantillaDuplicada(null);
   };
 
   return (
@@ -113,12 +153,19 @@ export const App: React.FC = () => {
 
         <RegistroForm
           empresasSugeridas={empresasSugeridas}
+          registroEnEdicion={registroEnEdicion}
+          plantillaDuplicada={plantillaDuplicada}
           onGuardar={handleGuardarRegistro}
+          onActualizar={handleActualizarRegistro}
+          onCancelarModoEspecial={handleCancelarModoEspecial}
         />
 
         <div id="seccion-registros" className="scroll-mt-20">
           <RegistrosList
             registros={registros}
+            idEnEdicion={registroEnEdicion?.id}
+            onEditar={handleSeleccionarEditar}
+            onDuplicar={handleSeleccionarDuplicar}
             onEliminar={handleEliminarRegistro}
           />
         </div>

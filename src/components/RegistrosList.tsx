@@ -8,6 +8,9 @@ import { RegistroAcceso } from '../types/registro';
 
 interface RegistrosListProps {
   registros: RegistroAcceso[];
+  idEnEdicion?: string | null;
+  onEditar: (registro: RegistroAcceso) => void;
+  onDuplicar: (registro: RegistroAcceso) => void;
   onEliminar: (id: string) => void;
 }
 
@@ -21,7 +24,13 @@ function obtenerFechaInputLocal(fecha: Date): string {
   return `${anio}-${mes}-${dia}`;
 }
 
-export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onEliminar }) => {
+export const RegistrosList: React.FC<RegistrosListProps> = ({
+  registros,
+  idEnEdicion,
+  onEditar,
+  onDuplicar,
+  onEliminar,
+}) => {
   const [busqueda, setBusqueda] = useState('');
   const [fechaDesde, setFechaDesde] = useState('');
   const [fechaHasta, setFechaHasta] = useState('');
@@ -332,90 +341,100 @@ export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onElimi
         <>
           {/* Vista Móvil: Tarjetas (< md) */}
           <div className="mt-4 flex flex-col gap-3 md:hidden">
-            {registrosFiltrados.map((reg) => (
-              <article
-                key={reg.id}
-                className="flex flex-col gap-2.5 rounded-xl border border-neutral-200 border-l-4 border-l-santander-500 bg-neutral-50/60 p-3.5 shadow-2xs"
-              >
-                <div className="flex items-start justify-between gap-2 border-b border-neutral-200/80 pb-2.5">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-lg bg-santander-500 px-2.5 py-1 font-mono text-sm font-bold text-white">
-                        ATM {reg.numeroAtm}
-                      </span>
-                      <span className="rounded-md bg-neutral-200/80 px-2 py-0.5 text-xs font-semibold text-neutral-800">
-                        {reg.empresa}
-                      </span>
-                    </div>
-                    <p className="mt-1.5 text-xs font-medium text-neutral-500">
-                      {formatearFechaHoraLegible(reg.fechaHora)}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setRegistroAEliminar(reg)}
-                    aria-label={`Eliminar registro de ATM ${reg.numeroAtm}`}
-                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-neutral-300 bg-white text-neutral-700 transition-colors hover:border-santander-300 hover:bg-santander-50 hover:text-santander-600 focus:outline-none focus:ring-2 focus:ring-santander-500"
-                  >
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="text-sm">
-                  <span className="text-xs font-semibold text-neutral-500 uppercase">Local: </span>
-                  <span className="font-semibold text-[#191919]">{reg.nombreLocal}</span>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-neutral-500 uppercase">
-                    Técnicos ({reg.tecnicos.length}):
-                  </span>
-                  <div className="flex flex-col gap-1.5">
-                    {reg.tecnicos.map((tec, idx) => (
-                      <div
-                        key={`${tec.rut}-${idx}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-200/80 bg-white px-2.5 py-1.5 text-sm"
-                      >
-                        <span className="font-semibold text-[#191919]">
-                          {tec.nombre} {tec.apellido}
+            {registrosFiltrados.map((reg) => {
+              const estaEditando = idEnEdicion === reg.id;
+              return (
+                <article
+                  key={reg.id}
+                  className={`flex flex-col gap-2.5 rounded-xl border border-l-4 border-l-santander-500 p-3.5 shadow-2xs ${
+                    estaEditando
+                      ? 'border-amber-400 bg-amber-50/50'
+                      : 'border-neutral-200 bg-neutral-50/60'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-neutral-200/80 pb-2.5">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-santander-500 px-2.5 py-1 font-mono text-sm font-bold text-white">
+                          ATM {reg.numeroAtm}
                         </span>
-                        <span className="font-mono text-xs font-semibold text-neutral-600">
-                          {tec.rut}
+                        <span className="rounded-md bg-neutral-200/80 px-2 py-0.5 text-xs font-semibold text-neutral-800">
+                          {reg.empresa}
                         </span>
                       </div>
+                      <p className="mt-1.5 text-xs font-medium text-neutral-500">
+                        {formatearFechaHoraLegible(reg.fechaHora)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-sm">
+                    <span className="text-xs font-semibold text-neutral-500 uppercase">Local: </span>
+                    <span className="font-semibold text-[#191919]">{reg.nombreLocal}</span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-neutral-500 uppercase">
+                      Técnicos ({reg.tecnicos.length}):
+                    </span>
+                    <div className="flex flex-col gap-1.5">
+                      {reg.tecnicos.map((tec, idx) => (
+                        <div
+                          key={`${tec.rut}-${idx}`}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-neutral-200/80 bg-white px-2.5 py-1.5 text-sm"
+                        >
+                          <span className="font-semibold text-[#191919]">
+                            {tec.nombre} {tec.apellido}
+                          </span>
+                          <span className="font-mono text-xs font-semibold text-neutral-600">
+                            {tec.rut}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-xs font-semibold text-neutral-500 uppercase">
+                      Patentes:
+                    </span>
+                    {reg.patentes.map((pat) => (
+                      <span
+                        key={pat}
+                        className="rounded-md border border-neutral-300 bg-white px-2 py-0.5 font-mono text-xs font-bold tracking-wider text-[#191919]"
+                      >
+                        {pat}
+                      </span>
                     ))}
                   </div>
-                </div>
 
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="text-xs font-semibold text-neutral-500 uppercase">
-                    Patentes:
-                  </span>
-                  {reg.patentes.map((pat) => (
-                    <span
-                      key={pat}
-                      className="rounded-md border border-neutral-300 bg-white px-2 py-0.5 font-mono text-xs font-bold tracking-wider text-[#191919]"
+                  {/* Acciones en tarjeta móvil: Duplicar, Modificar, Eliminar */}
+                  <div className="mt-1 grid grid-cols-3 gap-2 border-t border-neutral-200/80 pt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => onDuplicar(reg)}
+                      className="flex min-h-[42px] items-center justify-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100"
                     >
-                      {pat}
-                    </span>
-                  ))}
-                </div>
-              </article>
-            ))}
+                      <span>Duplicar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onEditar(reg)}
+                      className="flex min-h-[42px] items-center justify-center gap-1 rounded-xl border border-neutral-300 bg-white px-2 py-1.5 text-xs font-bold text-[#191919] transition-colors hover:bg-neutral-100"
+                    >
+                      <span>Modificar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRegistroAEliminar(reg)}
+                      className="flex min-h-[42px] items-center justify-center gap-1 rounded-xl border border-santander-200 bg-santander-50 px-2 py-1.5 text-xs font-bold text-santander-600 transition-colors hover:bg-santander-100"
+                    >
+                      <span>Eliminar</span>
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
           {/* Vista Escritorio: Tabla (>= md) */}
@@ -429,65 +448,91 @@ export const RegistrosList: React.FC<RegistrosListProps> = ({ registros, onElimi
                   <th className="px-2 py-3">Empresa</th>
                   <th className="px-2 py-3">Técnicos (Nombre y RUT)</th>
                   <th className="px-2 py-3">Patentes</th>
-                  <th className="py-3 pl-2 pr-3 text-right">Acción</th>
+                  <th className="py-3 pl-2 pr-3 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200">
-                {registrosFiltrados.map((reg) => (
-                  <tr key={reg.id} className="transition-colors hover:bg-santander-50/30">
-                    <td className="whitespace-nowrap py-3.5 pl-3 pr-2 text-xs text-neutral-600 align-top">
-                      {formatearFechaHoraLegible(reg.fechaHora)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-3.5 align-top">
-                      <span className="rounded-md bg-santander-500 px-2 py-1 font-mono text-xs font-bold text-white">
-                        {reg.numeroAtm}
-                      </span>
-                    </td>
-                    <td className="px-2 py-3.5 font-medium text-[#191919] align-top">
-                      {reg.nombreLocal}
-                    </td>
-                    <td className="px-2 py-3.5 text-neutral-700 align-top">{reg.empresa}</td>
-                    <td className="px-2 py-3.5 align-top">
-                      <div className="flex flex-col gap-1.5">
-                        {reg.tecnicos.map((tec, idx) => (
-                          <div
-                            key={`${tec.rut}-${idx}`}
-                            className="flex flex-wrap items-center gap-2 text-xs"
-                          >
-                            <span className="font-semibold text-[#191919]">
-                              {tec.nombre} {tec.apellido}
+                {registrosFiltrados.map((reg) => {
+                  const estaEditando = idEnEdicion === reg.id;
+                  return (
+                    <tr
+                      key={reg.id}
+                      className={`transition-colors ${
+                        estaEditando ? 'bg-amber-50/70' : 'hover:bg-santander-50/30'
+                      }`}
+                    >
+                      <td className="whitespace-nowrap py-3.5 pl-3 pr-2 text-xs text-neutral-600 align-top">
+                        {formatearFechaHoraLegible(reg.fechaHora)}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-3.5 align-top">
+                        <span className="rounded-md bg-santander-500 px-2 py-1 font-mono text-xs font-bold text-white">
+                          {reg.numeroAtm}
+                        </span>
+                      </td>
+                      <td className="px-2 py-3.5 font-medium text-[#191919] align-top">
+                        {reg.nombreLocal}
+                      </td>
+                      <td className="px-2 py-3.5 text-neutral-700 align-top">{reg.empresa}</td>
+                      <td className="px-2 py-3.5 align-top">
+                        <div className="flex flex-col gap-1.5">
+                          {reg.tecnicos.map((tec, idx) => (
+                            <div
+                              key={`${tec.rut}-${idx}`}
+                              className="flex flex-wrap items-center gap-2 text-xs"
+                            >
+                              <span className="font-semibold text-[#191919]">
+                                {tec.nombre} {tec.apellido}
+                              </span>
+                              <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-700">
+                                {tec.rut}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-2 py-3.5 align-top">
+                        <div className="flex flex-wrap gap-1">
+                          {reg.patentes.map((pat) => (
+                            <span
+                              key={pat}
+                              className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-0.5 font-mono text-xs font-bold text-[#191919]"
+                            >
+                              {pat}
                             </span>
-                            <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-neutral-700">
-                              {tec.rut}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-2 py-3.5 align-top">
-                      <div className="flex flex-wrap gap-1">
-                        {reg.patentes.map((pat) => (
-                          <span
-                            key={pat}
-                            className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-0.5 font-mono text-xs font-bold text-[#191919]"
+                          ))}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap py-3.5 pl-2 pr-3 text-right align-top">
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onDuplicar(reg)}
+                            title="Reutilizar esta lista de técnicos y patentes para otro ATM/local"
+                            className="inline-flex min-h-[36px] items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
-                            {pat}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap py-3.5 pl-2 pr-3 text-right align-top">
-                      <button
-                        type="button"
-                        onClick={() => setRegistroAEliminar(reg)}
-                        aria-label={`Eliminar registro de ATM ${reg.numeroAtm}`}
-                        className="inline-flex min-h-[38px] items-center gap-1 rounded-full border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 transition-colors hover:border-santander-300 hover:bg-santander-50 hover:text-santander-600 focus:outline-none focus:ring-2 focus:ring-santander-500"
-                      >
-                        <span>Eliminar</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                            <span>Duplicar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onEditar(reg)}
+                            title="Modificar este registro"
+                            className="inline-flex min-h-[36px] items-center gap-1 rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-bold text-[#191919] transition-colors hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-santander-500"
+                          >
+                            <span>Modificar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRegistroAEliminar(reg)}
+                            aria-label={`Eliminar registro de ATM ${reg.numeroAtm}`}
+                            className="inline-flex min-h-[36px] items-center gap-1 rounded-full border border-santander-200 bg-santander-50 px-3 py-1 text-xs font-bold text-santander-600 transition-colors hover:bg-santander-100 focus:outline-none focus:ring-2 focus:ring-santander-500"
+                          >
+                            <span>Eliminar</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
